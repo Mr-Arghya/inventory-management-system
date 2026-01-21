@@ -15,6 +15,10 @@ const OrderItemSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    variant_sku: {
+      type: String,
+      required: false,
+    },
     variant_attributes: {
       type: Map,
       of: String,
@@ -60,6 +64,10 @@ const OrderItemSchema = new mongoose.Schema(
     notes: {
       type: String,
       required: false,
+    },
+    available_stock: {
+      type: Number,
+      default: 0,
     },
   },
   { _id: true }
@@ -200,14 +208,12 @@ const OrderSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Indexes for efficient querying
 OrderSchema.index({ tenant_id: 1, createdAt: -1 });
 OrderSchema.index({ tenant_id: 1, order_status: 1 });
 OrderSchema.index({ order_number: 1 });
 OrderSchema.index({ "customer.email": 1 });
 OrderSchema.index({ stock_reservation_expiry: 1 });
 
-// Pre-save hook to generate order number
 OrderSchema.pre("save", async function (next) {
   if (!this.order_number) {
     const count = await mongoose.model("Order").countDocuments();
@@ -216,7 +222,6 @@ OrderSchema.pre("save", async function (next) {
   next();
 });
 
-// Virtual for checking if all items are fulfilled
 OrderSchema.virtual("all_items_fulfilled").get(function () {
   return this.items.every(
     (item) =>
@@ -225,17 +230,14 @@ OrderSchema.virtual("all_items_fulfilled").get(function () {
   );
 });
 
-// Virtual for checking if order can be cancelled
 OrderSchema.virtual("can_be_cancelled").get(function () {
   return ["pending", "confirmed", "processing"].includes(this.order_status);
 });
 
-// Virtual for reserved stock total
 OrderSchema.virtual("total_reserved_items").get(function () {
   return this.items.reduce((sum, item) => sum + item.reserved_quantity, 0);
 });
 
-// Method to check stock availability for all items
 OrderSchema.methods.checkStockAvailability = async function () {
   const { Product } = require("../models");
   const results = [];
@@ -250,7 +252,6 @@ OrderSchema.methods.checkStockAvailability = async function () {
         currentStock = variant ? variant.stock || 0 : 0;
       }
     } else {
-      // For products without variants, we'd need a different approach
       currentStock = 0;
     }
 
@@ -270,13 +271,11 @@ OrderSchema.methods.checkStockAvailability = async function () {
   return results;
 };
 
-// Static method to generate order number
 OrderSchema.statics.generateOrderNumber = async function () {
   const count = await this.countDocuments();
   return `ORD-${Date.now()}-${(count + 1).toString().padStart(6, "0")}`;
 };
 
-// Method to calculate totals
 OrderSchema.methods.calculateTotals = function () {
   this.subtotal = this.items.reduce((sum, item) => sum + item.total_price, 0);
   this.total_amount = this.subtotal + this.tax_amount + this.shipping_amount - this.discount_amount;

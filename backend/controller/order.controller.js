@@ -28,15 +28,13 @@ const OrderController = {
   async getAllOrders(req, res) {
     try {
       const user = req.user;
-      const tenantId = user.owner_id || user.tenant_id;
+      const tenantId = user.owner_id;
       const query = req.query;
 
       const page = query.page ? parseInt(query.page) : 1;
       const size = query.size ? parseInt(query.size) : 10;
       const response = {};
-      const filter = {
-        is_deleted: false,
-      };
+      const filter = {};
       if (query.status) {
         filter.order_status = query.status;
       }

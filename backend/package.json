@@ -1,7 +1,7 @@
 {
-  "name": "questions-api",
+  "name": "Inventory SaaS",
   "version": "1.0.0",
-  "description": "Quiz API with MongoDB, Express, and Node.js",
+  "description": "",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

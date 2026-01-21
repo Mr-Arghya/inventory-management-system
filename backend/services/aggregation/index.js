@@ -1,7 +1,7 @@
-// Maintain collection name in model/index.js and Aggregation name to be same
-
 const ProductAGGREGATION = require("./product.aggregation");
+const OrderAggregation = require("./order.aggregation");
 
 module.exports = {
   ProductAGGREGATION,
+  OrderAggregation
 };

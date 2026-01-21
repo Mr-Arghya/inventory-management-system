@@ -25,8 +25,12 @@ const statusConfig: Record<OrderStatus, { label: string; className: string; icon
     className: "bg-chart-2/10 text-chart-2 border-chart-2/20",
     icon: Package,
   },
-  completed: { label: "Completed", className: "bg-chart-1/10 text-chart-1 border-chart-1/20", icon: CheckCircle },
+  fulfilled: { label: "Completed", className: "bg-chart-1/10 text-chart-1 border-chart-1/20", icon: CheckCircle },
   cancelled: { label: "Cancelled", className: "bg-muted text-muted-foreground border-muted", icon: XCircle },
+  confirmed: { label: "Confirmed", className: "bg-chart-3/10 text-chart-3 border-chart-3/20", icon: Package },
+  processing: { label: "Processing", className: "bg-chart-4/10 text-chart-4 border-chart-4/20", icon: Package },
+  refunded: { label: "Refunded", className: "bg-chart-5/10 text-chart-5 border-chart-5/20", icon: Package },
+  failed: { label: "Failed", className: "bg-chart-6/10 text-chart-6 border-chart-6/20", icon: AlertCircle },
 }
 
 export function OrderDetailSheet({ order, onClose, onUpdate }: OrderDetailSheetProps) {
@@ -46,7 +50,7 @@ export function OrderDetailSheet({ order, onClose, onUpdate }: OrderDetailSheetP
   const canCancel = order.status === "pending"
 
   const handleFulfillItem = async (item: OrderItem) => {
-    const quantity = fulfillQuantities[item.id] || 0
+    const quantity = fulfillQuantities[item._id] || 0
     if (quantity <= 0) return
 
     setIsProcessing(true)
@@ -54,14 +58,12 @@ export function OrderDetailSheet({ order, onClose, onUpdate }: OrderDetailSheetP
 
     const newFulfilledQuantity = Math.min(item.quantity, item.fulfilledQuantity + quantity)
     const updatedItems = order.items.map((i) =>
-      i.id === item.id ? { ...i, fulfilledQuantity: newFulfilledQuantity } : i,
+      i._id === item._id ? { ...i, fulfilledQuantity: newFulfilledQuantity } : i,
     )
-
-    // Check if all items are fulfilled
     const allFulfilled = updatedItems.every((i) => i.fulfilledQuantity >= i.quantity)
     const anyFulfilled = updatedItems.some((i) => i.fulfilledQuantity > 0)
 
-    const newStatus: OrderStatus = allFulfilled ? "completed" : anyFulfilled ? "partially_fulfilled" : order.status
+    const newStatus: OrderStatus = allFulfilled ? "fulfilled" : anyFulfilled ? "partially_fulfilled" : order.status
 
     const updatedOrder: Order = {
       ...order,
@@ -70,9 +72,9 @@ export function OrderDetailSheet({ order, onClose, onUpdate }: OrderDetailSheetP
       updatedAt: new Date().toISOString(),
     }
 
-    console.log("[v0] Order item fulfilled:", { orderId: order.id, itemId: item.id, quantity })
+    console.log("[v0] Order item fulfilled:", { orderId: order._id, itemId: item._id, quantity })
     onUpdate(updatedOrder)
-    setFulfillQuantities((prev) => ({ ...prev, [item.id]: 0 }))
+    setFulfillQuantities((prev) => ({ ...prev, [item._id]: 0 }))
     setIsProcessing(false)
   }
 
@@ -85,8 +87,6 @@ export function OrderDetailSheet({ order, onClose, onUpdate }: OrderDetailSheetP
       status: "cancelled",
       updatedAt: new Date().toISOString(),
     }
-
-    console.log("[v0] Order cancelled:", order.id)
     onUpdate(updatedOrder)
     setIsProcessing(false)
   }
@@ -133,7 +133,7 @@ export function OrderDetailSheet({ order, onClose, onUpdate }: OrderDetailSheetP
                 const hasStockIssue = item.availableStock < remaining
 
                 return (
-                  <div key={item.id} className="p-4 space-y-3">
+                  <div key={item._id} className="p-4 space-y-3">
                     <div className="flex items-start justify-between">
                       <div>
                         <p className="font-medium text-card-foreground">{item.productName}</p>
@@ -168,11 +168,11 @@ export function OrderDetailSheet({ order, onClose, onUpdate }: OrderDetailSheetP
                           type="number"
                           min="0"
                           max={Math.min(remaining, item.availableStock)}
-                          value={fulfillQuantities[item.id] || ""}
+                          value={fulfillQuantities[item._id] || ""}
                           onChange={(e) =>
                             setFulfillQuantities((prev) => ({
                               ...prev,
-                              [item.id]: Math.min(
+                              [item._id]: Math.min(
                                 Math.max(0, Number.parseInt(e.target.value) || 0),
                                 Math.min(remaining, item.availableStock),
                               ),
@@ -185,7 +185,7 @@ export function OrderDetailSheet({ order, onClose, onUpdate }: OrderDetailSheetP
                           size="sm"
                           variant="outline"
                           onClick={() => handleFulfillItem(item)}
-                          disabled={!fulfillQuantities[item.id] || isProcessing}
+                          disabled={!fulfillQuantities[item._id] || isProcessing}
                         >
                           Fulfill
                         </Button>

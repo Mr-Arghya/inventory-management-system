@@ -16,8 +16,12 @@ interface OrdersTableProps {
 const statusConfig: Record<OrderStatus, { label: string; className: string }> = {
   pending: { label: "Pending", className: "bg-warning/10 text-warning border-warning/20" },
   partially_fulfilled: { label: "Partial", className: "bg-chart-2/10 text-chart-2 border-chart-2/20" },
-  completed: { label: "Completed", className: "bg-chart-1/10 text-chart-1 border-chart-1/20" },
+  fulfilled: { label: "Completed", className: "bg-chart-1/10 text-chart-1 border-chart-1/20" },
   cancelled: { label: "Cancelled", className: "bg-muted text-muted-foreground border-muted" },
+  confirmed: { label: "Confirmed", className: "bg-chart-3/10 text-chart-3 border-chart-3/20" },
+  processing: { label: "Processing", className: "bg-chart-4/10 text-chart-4 border-chart-4/20" },
+  refunded: { label: "Refunded", className: "bg-chart-5/10 text-chart-5 border-chart-5/20" },
+  failed: { label: "Failed", className: "bg-chart-6/10 text-chart-6 border-chart-6/20" },
 }
 
 const OrderRow = memo(function OrderRow({
@@ -89,7 +93,7 @@ export function OrdersTable({ orders, onSelectOrder }: OrdersTableProps) {
         </TableHeader>
         <TableBody>
           {orders.map((order) => (
-            <OrderRow key={order.id} order={order} onSelect={onSelectOrder} />
+            <OrderRow key={order._id} order={order} onSelect={onSelectOrder} />
           ))}
         </TableBody>
       </Table>

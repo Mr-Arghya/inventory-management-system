@@ -118,7 +118,7 @@ export const inventoryApi = {
 export const ordersApi = {
   getAll: (params?: { page?: number; pageSize?: number; status?: string }) =>
     fetchApi<PaginatedResponse<Order>>(
-      `/orders?${new URLSearchParams(params as Record<string, string>).toString()}`
+      `/order?${new URLSearchParams(params as Record<string, string>).toString()}`
     ),
 
   getById: (id: string) => fetchApi<Order>(`/orders/${id}`),

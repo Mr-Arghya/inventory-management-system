@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const { Types } = require("mongoose");
 const { Order, Product, StockMovement } = require("../models");
+const { OrderAggregation } = require("./aggregation");
 
 const ORDER_CONFIG = {
   STOCK_RESERVATION_MINUTES: 15, // Stock reserved for 15 minutes
@@ -106,6 +107,7 @@ const OrderService = {
           product_id: product._id,
           variant_id: item.variant_id,
           product_name: product.name,
+          variant_sku: variant.sku || null,
           variant_attributes: variantAttributes,
           quantity: item.quantity,
           unit_price: unitPrice,
@@ -114,6 +116,7 @@ const OrderService = {
           fulfilled_quantity: 0,
           cancelled_quantity: 0,
           item_status: "reserved",
+          available_stock: newStock,
           notes: item.notes || null,
         });
       }
@@ -179,7 +182,33 @@ const OrderService = {
       throw new Error("Order not found");
     }
 
-    return order;
+    // Transform to required response structure
+    return {
+      _id: order._id,
+      tenantId: order.tenant_id,
+      orderNumber: order.order_number,
+      status: order.order_status,
+      paymentStatus: order.payment_status,
+      totalAmount: order.total_amount,
+      currency: order.currency,
+      customerName: order.customer?.name,
+      customerEmail: order.customer?.email,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+      items: order.items.map((item) => ({
+        _id: item._id,
+        orderId: order._id,
+        variantId: item.variant_id,
+        productName: item.product_name,
+        variantSku: item.variant_sku,
+        quantity: item.quantity,
+        fulfilledQuantity: item.fulfilled_quantity,
+        unitPrice: item.unit_price,
+        availableStock: item.available_stock || 0,
+        totalPrice: item.total_price,
+        itemStatus: item.item_status,
+      })),
+    };
   },
 
   /**
@@ -199,43 +228,22 @@ const OrderService = {
       ...filter,
     };
 
+    console.log("matchFilter", matchFilter);
+
     const orders = await Order.aggregate([
       { $match: matchFilter },
       { $sort: sort },
       { $skip: skip },
       { $limit: limit },
-      {
-        $lookup: {
-          from: "users",
-          localField: "created_by",
-          foreignField: "_id",
-          as: "createdByUser",
-        },
-      },
-      {
-        $unwind: {
-          path: "$createdByUser",
-          preserveNullAndEmptyArrays: true,
-        },
-      },
-      {
-        $project: {
-          _id: 1,
-          order_number: 1,
-          customer: 1,
-          order_status: 1,
-          payment_status: 1,
-          total_amount: 1,
-          currency: 1,
-          createdAt: 1,
-          items: 1,
-          "createdByUser.name": 1,
-          "createdByUser.email": 1,
-        },
-      },
+      ...OrderAggregation
     ]);
 
-    const total = await Order.countDocuments(matchFilter);
+    const totalAggregationData = await Order.aggregate([
+      ...OrderAggregation,
+      { $match: matchFilter },
+    ]);
+
+    const total = totalAggregationData.length;
 
     return {
       orders,
@@ -306,6 +314,9 @@ const OrderService = {
                 ],
                 { session }
               );
+
+              // Update available_stock in order item
+              item.available_stock = newStock;
             }
           }
         }
@@ -354,8 +365,6 @@ const OrderService = {
       if (!order) {
         throw new Error("Order not found");
       }
-
-      // Check if order can be fulfilled
       if (["cancelled", "fulfilled", "refunded"].includes(order.order_status)) {
         throw new Error(`Order cannot be fulfilled. Current status: ${order.order_status}`);
       }
@@ -364,7 +373,6 @@ const OrderService = {
       let allItemsFulfilled = true;
 
       if (item_fulfillments.length === 0) {
-        // Full order fulfillment
         for (const item of order.items) {
           const remainingQuantity = item.reserved_quantity - item.fulfilled_quantity;
           if (remainingQuantity > 0) {
@@ -386,7 +394,6 @@ const OrderService = {
           order.order_status = "partially_fulfilled";
         }
       } else {
-        // Partial fulfillment by items
         for (const fulfillment of item_fulfillments) {
           const item = order.items.id(fulfillment.item_id);
           
@@ -411,7 +418,6 @@ const OrderService = {
           }
         }
 
-        // Check if all items are fulfilled
         const allItemsAreFulfilled = order.items.every(
           (item) => item.item_status === "fulfilled"
         );
@@ -449,9 +455,6 @@ const OrderService = {
     }
   },
 
-  /**
-   * Fulfill a specific item in an order
-   */
   async fulfillOrderItem(orderId, itemId, tenantId, quantity, notes = null) {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -527,9 +530,6 @@ const OrderService = {
     }
   },
 
-  /**
-   * Update order status
-   */
   async updateOrderStatus(orderId, tenantId, newStatus) {
     const validStatuses = [
       "pending",
@@ -565,9 +565,6 @@ const OrderService = {
     return order;
   },
 
-  /**
-   * Update payment status
-   */
   async updatePaymentStatus(orderId, tenantId, paymentStatus, paymentDetails = {}) {
     const order = await Order.findOneAndUpdate(
       {
@@ -590,10 +587,6 @@ const OrderService = {
     return order;
   },
 
-  /**
-   * Check and release expired stock reservations
-   * Should be called by a cron job
-   */
   async releaseExpiredReservations() {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -641,6 +634,8 @@ const OrderService = {
                   ],
                   { session }
                 );
+
+                item.available_stock = newStock;
               }
             }
 
@@ -678,9 +673,6 @@ const OrderService = {
     }
   },
 
-  /**
-   * Get order statistics
-   */
   async getOrderStatistics(tenantId, dateFilter = {}) {
     const matchFilter = {
       tenant_id: new Types.ObjectId(tenantId),
